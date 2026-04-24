@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CampusFinder | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <nav class="bg-blue-600 p-4 text-white shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold"><a href="index.html">CampusFinder</a></h1>
+            <a href="index.html" class="text-sm font-medium hover:text-blue-100">← Back to Feed</a>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-10 px-4">
+        <div class="max-w-md mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden">
+
+            <div class="flex">
+                <button id="loginTab" onclick="switchTab('login')"
+                    class="flex-1 py-5 font-black text-lg bg-blue-600 text-white transition">
+                    Login
+                </button>
+                <button id="signupTab" onclick="switchTab('signup')"
+                    class="flex-1 py-5 font-black text-lg bg-gray-100 text-gray-500 transition">
+                    Sign Up
+                </button>
+            </div>
+
+            <div class="p-8">
+
+                <form id="loginForm" class="space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                        <input type="email" id="loginEmail" required placeholder="you@example.com"
+                            class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                        <input type="password" id="loginPassword" required placeholder="••••••••"
+                            class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+                    <div id="loginSuccess" class="hidden bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm font-bold"></div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 shadow-xl transition active:scale-95">
+                        LOGIN
+                    </button>
+                    <p class="text-center text-sm text-gray-400">
+                        No account?
+                        <button type="button" onclick="switchTab('signup')" class="text-blue-600 font-bold hover:underline">Sign up</button>
+                    </p>
+                </form>
+
+                <form id="signupForm" class="hidden space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                        <input type="text" id="signupName" required placeholder="Esha Shahzadi"
+                            class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="you@example.com"
+                            class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                        <input type="password" id="signupPassword" required placeholder="Min. 6 characters"
+                            class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div id="signupError" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+                    <div id="signupSuccess" class="hidden bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm font-bold"></div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 shadow-xl transition active:scale-95">
+                        CREATE ACCOUNT
+                    </button>
+                    <p class="text-center text-sm text-gray-400">
+                        Already have an account?
+                        <button type="button" onclick="switchTab('login')" class="text-blue-600 font-bold hover:underline">Login</button>
+                    </p>
+                </form>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = 'http://localhost:5000';
+
+        if (localStorage.getItem('cf_token')) window.location.href = 'index.html';
+
+        function switchTab(tab) {
+            const isLogin = tab === 'login';
+            document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+            document.getElementById('signupForm').classList.toggle('hidden', isLogin);
+            document.getElementById('loginTab').className  = `flex-1 py-5 font-black text-lg transition ${isLogin  ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`;
+            document.getElementById('signupTab').className = `flex-1 py-5 font-black text-lg transition ${!isLogin ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`;
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const errEl = document.getElementById('loginError');
+            const sucEl = document.getElementById('loginSuccess');
+            errEl.classList.add('hidden');
+            sucEl.classList.add('hidden');
+            try {
+                const res  = await fetch(`${API}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email:    document.getElementById('loginEmail').value,
+                        password: document.getElementById('loginPassword').value
+                    })
+                });
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message);
+                localStorage.setItem('cf_token', json.token);
+                localStorage.setItem('cf_user',  JSON.stringify(json.user));
+                sucEl.textContent = `✅ Welcome back, ${json.user.name}! Redirecting...`;
+                sucEl.classList.remove('hidden');
+                setTimeout(() => window.location.href = 'index.html', 1500);
+            } catch (err) {
+                errEl.textContent = '❌ ' + err.message;
+                errEl.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const errEl = document.getElementById('signupError');
+            const sucEl = document.getElementById('signupSuccess');
+            errEl.classList.add('hidden');
+            sucEl.classList.add('hidden');
+            try {
+                const res  = await fetch(`${API}/api/auth/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name:     document.getElementById('signupName').value,
+                        email:    document.getElementById('signupEmail').value,
+                        password: document.getElementById('signupPassword').value
+                    })
+                });
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message);
+                localStorage.setItem('cf_token', json.token);
+                localStorage.setItem('cf_user',  JSON.stringify(json.user));
+                sucEl.textContent = `✅ Account created! Welcome, ${json.user.name}! Redirecting...`;
+                sucEl.classList.remove('hidden');
+                setTimeout(() => window.location.href = 'index.html', 1500);
+            } catch (err) {
+                errEl.textContent = '❌ ' + err.message;
+                errEl.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

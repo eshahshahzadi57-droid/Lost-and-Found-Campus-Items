@@ -1,0 +1,22 @@
+{
+  "name": "lost-and-found",
+  "version": "1.0.0",
+  "description": "Campus Lost and Found Portal",
+  "license": "ISC",
+  "author": "Eshah Shahzadi",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev":   "nodemon server.js"
+  },
+  "dependencies": {
+    "cors":     "^2.8.6",
+    "express":  "^5.2.1",
+    "mongoose": "^9.4.1",
+    "multer":   "^2.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
