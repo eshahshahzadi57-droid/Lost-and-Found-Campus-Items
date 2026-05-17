@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CampusFinder | Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+
+    <nav class="bg-blue-600 p-4 text-white shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-tight"><a href="index.html">CampusFinder</a></h1>
+            <div class="flex items-center gap-4">
+                <div id="loggedOutNav" class="hidden items-center gap-4">
+                    <a href="login.html" class="hover:text-blue-200 transition text-sm font-medium">Login</a>
+                    <a href="reportForm.html" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition text-sm">Report an Item</a>
+                </div>
+                <div id="loggedInNav" class="hidden items-center gap-4">
+                    <span id="navName" class="text-blue-100 text-sm font-medium"></span>
+                    <a href="dashboard.html" class="hover:text-blue-200 transition text-sm font-medium">My Posts</a>
+                    <a href="reportForm.html" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition text-sm">Report an Item</a>
+                    <button onclick="logout()" class="text-blue-200 hover:text-white text-sm font-medium transition">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <header class="bg-white py-16 border-b">
+        <div class="container mx-auto text-center px-4">
+            <h2 class="text-4xl font-extrabold text-gray-900 mb-4">Lost something on campus?</h2>
+            <p class="text-gray-600 mb-8 max-w-lg mx-auto">Check the community board to see if someone found your keys, wallet, or gadgets.</p>
+            <div class="max-w-md mx-auto flex gap-2">
+                <input id="searchInput" type="text" placeholder="Search: 'Black Wallet'..."
+                    class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+                <button onclick="loadItems()" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 font-bold transition">Search</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-12 px-4">
+        <div class="flex justify-between items-center mb-8">
+            <h3 class="text-2xl font-bold text-gray-800">Recent Reports</h3>
+            <div id="countLabel" class="text-sm text-gray-500">Loading...</div>
+        </div>
+
+        <div id="loadingSpinner" class="text-center py-16 text-gray-400">
+            <div class="text-5xl mb-4 animate-pulse">🔍</div>
+            <p class="font-medium">Fetching reports...</p>
+        </div>
+
+        <div id="emptyState" class="hidden text-center py-16 text-gray-400">
+            <div class="text-5xl mb-4">📭</div>
+            <p class="font-medium">No reports found.</p>
+            <a href="reportForm.html" class="mt-4 inline-block text-blue-600 font-bold hover:underline">Be the first to post one!</a>
+        </div>
+
+        <div id="itemsGrid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8"></div>
+    </main>
+
+    <script>
+        const API = 'http://localhost:5000';
+
+        const CATEGORY_LABELS = {
+            electronics: 'Electronics',
+            stationery:  'Books & Stationery',
+            keys:        'Keys & ID Cards',
+            personal:    'Wallets & Personal Items'
+        };
+
+        const FALLBACK_IMAGES = {
+            electronics: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=500&q=80',
+            stationery:  'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=500&q=80',
+            keys:        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=500&q=80',
+            personal:    'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=500&q=80'
+        };
+
+        const token = localStorage.getItem('cf_token');
+        const user  = JSON.parse(localStorage.getItem('cf_user') || 'null');
+
+        if (token && user) {
+            document.getElementById('loggedInNav').classList.remove('hidden');
+            document.getElementById('loggedInNav').classList.add('flex');
+            document.getElementById('navName').textContent = `👋 ${user.name}`;
+        } else {
+            document.getElementById('loggedOutNav').classList.remove('hidden');
+            document.getElementById('loggedOutNav').classList.add('flex');
+        }
+
+        function logout() {
+            localStorage.removeItem('cf_token');
+            localStorage.removeItem('cf_user');
+            window.location.reload();
+        }
+
+        function formatDate(iso) {
+            return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        function buildCard(item) {
+            const imgSrc = item.imagePath ? `${API}/${item.imagePath}` : (FALLBACK_IMAGES[item.itemCategory] || FALLBACK_IMAGES.personal);
+            const badgeClass = item.itemStatus === 'found' ? 'bg-green-500' : 'bg-red-500';
+            const badgeLabel = item.itemStatus === 'found' ? 'Found' : 'Lost';
+            return `
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300">
+                <div class="relative">
+                    <img src="${imgSrc}" alt="${item.itemName}" class="w-full h-48 object-cover"
+                        onerror="this.src='${FALLBACK_IMAGES.personal}'">
+                    <span class="absolute top-3 right-3 text-xs font-bold uppercase px-3 py-1 ${badgeClass} text-white rounded-full shadow-sm">${badgeLabel}</span>
+                </div>
+                <div class="p-5">
+                    <h4 class="text-xl font-bold text-gray-800">${item.itemName}</h4>
+                    <p class="text-sm text-gray-500 mt-1">${CATEGORY_LABELS[item.itemCategory] || item.itemCategory}</p>
+                    <p class="text-sm text-gray-600 mt-2 flex items-center"><span class="mr-1">📍</span>${item.itemLocation}</p>
+                    ${item.itemDescription ? `<p class="text-xs text-gray-400 mt-2 italic line-clamp-2">${item.itemDescription}</p>` : ''}
+                    <p class="text-xs text-gray-400 mt-1 italic">${formatDate(item.createdAt)}</p>
+                    ${item.postedBy?.name ? `<p class="text-xs text-gray-300 mt-1">Posted by ${item.postedBy.name}</p>` : ''}
+                    <button onclick="showDetails('${item._id}')"
+                        class="mt-4 w-full bg-gray-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-colors border border-blue-100">
+                        View Details
+                    </button>
+                </div>
+            </div>`;
+        }
+
+        async function loadItems() {
+            const search = document.getElementById('searchInput').value.trim();
+            const url = search ? `${API}/api/items?search=${encodeURIComponent(search)}` : `${API}/api/items`;
+
+            document.getElementById('loadingSpinner').classList.remove('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('itemsGrid').innerHTML = '';
+            document.getElementById('countLabel').textContent = 'Loading...';
+
+            try {
+                const res  = await fetch(url);
+                const json = await res.json();
+                document.getElementById('loadingSpinner').classList.add('hidden');
+
+                if (!json.success || json.data.length === 0) {
+                    document.getElementById('emptyState').classList.remove('hidden');
+                    document.getElementById('countLabel').textContent = '0 items';
+                    return;
+                }
+
+                document.getElementById('countLabel').textContent = `Showing ${json.count} item${json.count !== 1 ? 's' : ''}`;
+                document.getElementById('itemsGrid').innerHTML = json.data.map(buildCard).join('');
+
+            } catch (err) {
+                document.getElementById('loadingSpinner').classList.add('hidden');
+                document.getElementById('itemsGrid').innerHTML = `
+                    <div class="col-span-4 text-center py-16 text-red-400">
+                        <p class="text-5xl mb-4">⚠️</p>
+                        <p class="font-medium">Could not connect to server.</p>
+                        <p class="text-sm mt-1">Make sure server.js is running on port 5000.</p>
+                    </div>`;
+            }
+        }
+
+        async function showDetails(id) {
+            try {
+                const res  = await fetch(`${API}/api/items`);
+                const json = await res.json();
+                const item = json.data.find(i => i._id === id);
+                if (!item) return alert('Item not found.');
+                const imgSrc = item.imagePath ? `${API}/${item.imagePath}` : (FALLBACK_IMAGES[item.itemCategory] || FALLBACK_IMAGES.personal);
+                const modal = document.createElement('div');
+                modal.id = 'detailModal';
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+                modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+                    <img src="${imgSrc}" class="w-full h-56 object-cover" onerror="this.src='${FALLBACK_IMAGES.personal}'">
+                    <div class="p-6 space-y-3">
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-2xl font-extrabold text-gray-800">${item.itemName}</h3>
+                            <span class="text-xs font-bold uppercase px-3 py-1 rounded-full text-white ${item.itemStatus === 'found' ? 'bg-green-500' : 'bg-red-500'}">${item.itemStatus}</span>
+                        </div>
+                        <p class="text-sm text-gray-500">${CATEGORY_LABELS[item.itemCategory] || item.itemCategory}</p>
+                        <p class="text-sm text-gray-700"><span class="font-bold">📍 Location:</span> ${item.itemLocation}</p>
+                        ${item.itemDescription ? `<p class="text-sm text-gray-700"><span class="font-bold">📝 Details:</span> ${item.itemDescription}</p>` : ''}
+                        ${item.postedBy?.name ? `<p class="text-sm text-gray-500"><span class="font-bold">👤 Posted by:</span> ${item.postedBy.name}</p>` : ''}
+                        <p class="text-xs text-gray-400 italic">Posted on ${formatDate(item.createdAt)}</p>
+                        <button onclick="document.getElementById('detailModal').remove()"
+                            class="mt-4 w-full bg-blue-600 text-white py-3 rounded-2xl font-bold hover:bg-blue-700 transition">Close</button>
+                    </div>
+                </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+            } catch (err) {
+                alert('Could not load details.');
+            }
+        }
+
+        loadItems();
+    </script>
+</body>
+</html>
