@@ -148,9 +148,15 @@
         const token = localStorage.getItem('cf_token');
         const user  = JSON.parse(localStorage.getItem('cf_user') || 'null');
 
-        if (!token || !user) window.location.href = 'login.html';
+        // Global variable to keep track of the item currently being edited or resolved
+        let activeItemId = null;
 
-        document.getElementById('navName').textContent = `👋 ${user.name}`;
+        // Redirect to login if user isn't authenticated
+        if (!token || !user) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('navName').textContent = `👋 ${user.name}`;
+        }
 
         function logout() {
             localStorage.removeItem('cf_token');
@@ -179,8 +185,12 @@
         function buildRow(item) {
             const imgSrc = item.imagePath ? `${API}/${item.imagePath}` : (FALLBACK_IMAGES[item.itemCategory] || FALLBACK_IMAGES.personal);
             const badgeClass = item.itemStatus === 'found' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+            
+            // Safe execution by converting the item object safely into a string attributes
+            const serializedItem = btoa(unescape(encodeURIComponent(JSON.stringify(item))));
+
             return `
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex gap-4 items-start hover:shadow-md transition">
+            <div id="item-card-${item._id}" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex gap-4 items-start hover:shadow-md transition">
                 <img src="${imgSrc}" alt="${item.itemName}" class="w-20 h-20 object-cover rounded-xl flex-shrink-0"
                     onerror="this.src='${FALLBACK_IMAGES.personal}'">
                 <div class="flex-1 min-w-0">
@@ -193,11 +203,11 @@
                     <p class="text-xs text-gray-300 mt-1">${formatDate(item.createdAt)}</p>
                 </div>
                 <div class="flex flex-col gap-2 flex-shrink-0">
-                    <button onclick="resolveItem('${item._id}', '${item.itemName}')"
+                    <button onclick="openResolveModal('${item._id}', '${item.itemName.replace(/'/g, "\\'")}')"
                         class="px-4 py-2 bg-purple-50 text-purple-600 font-bold rounded-xl hover:bg-purple-100 transition text-sm">
                         ✅ Resolved
                     </button>
-                    <button onclick='openEditModal(${JSON.stringify(item)})'
+                    <button onclick="openEditModal('${serializedItem}')"
                         class="px-4 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition text-sm">
                         ✏️ Edit
                     </button>
@@ -209,6 +219,7 @@
             </div>`;
         }
 
+        // Load Items and Calculate Dashboard Metrics
         async function loadMyItems() {
             try {
                 const res  = await fetch(`${API}/api/items/mine`, {
@@ -219,138 +230,157 @@
 
                 if (!json.success || json.data.length === 0) {
                     document.getElementById('emptyState').classList.remove('hidden');
-                    document.getElementById('statTotal').textContent    = 0;
-                    document.getElementById('statLost').textContent     = 0;
-                    document.getElementById('statFound').textContent    = 0;
-                    document.getElementById('statResolved').textContent = parseInt(sessionStorage.getItem('cf_resolved') || '0');
+                    document.getElementById('itemsList').innerHTML = '';
+                    updateStats(0, 0, 0);
                     return;
                 }
 
-                const lost     = json.data.filter(i => i.itemStatus === 'lost').length;
-                const found    = json.data.filter(i => i.itemStatus === 'found').length;
-                const resolved = parseInt(sessionStorage.getItem('cf_resolved') || '0');
-                document.getElementById('statTotal').textContent    = json.count;
-                document.getElementById('statLost').textContent     = lost;
-                document.getElementById('statFound').textContent    = found;
-                document.getElementById('statResolved').textContent = resolved;
-                document.getElementById('itemsList').innerHTML      = json.data.map(buildRow).join('');
+                document.getElementById('emptyState').classList.add('hidden');
+                
+                let lostCount = 0;
+                let foundCount = 0;
+                let htmlContent = '';
+
+                json.data.forEach(item => {
+                    if (item.itemStatus === 'lost') lostCount++;
+                    if (item.itemStatus === 'found') foundCount++;
+                    htmlContent += buildRow(item);
+                });
+
+                document.getElementById('itemsList').innerHTML = htmlContent;
+                updateStats(json.data.length, lostCount, foundCount);
 
             } catch (err) {
-                document.getElementById('loadingSpinner').classList.add('hidden');
-                document.getElementById('itemsList').innerHTML = `
-                    <div class="text-center py-10 text-red-400">
-                        <p>⚠️ Could not connect to server. Make sure server.js is running.</p>
-                    </div>`;
+                console.error("Error loading dashboard items:", err);
+                document.getElementById('loadingSpinner').textContent = "❌ Failed to load items.";
             }
         }
 
-        // ── Resolve ──
-        let resolveTargetId = null;
+        function updateStats(total, lost, found) {
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statLost').textContent = lost;
+            document.getElementById('statFound').textContent = found;
+            
+            // Retrieve local session storage value for historically resolved item counters
+            const localResolved = parseInt(sessionStorage.getItem('cf_resolved') || '0');
+            document.getElementById('statResolved').textContent = localResolved;
+        }
 
-        function resolveItem(id, name) {
-            resolveTargetId = id;
+        // ─── RESOLVE ACTIONS ──────────────────────────────────────────────────
+        function openResolveModal(id, name) {
+            activeItemId = id;
             document.getElementById('resolveItemName').textContent = name;
             document.getElementById('resolveModal').classList.remove('hidden');
         }
 
         function closeResolveModal() {
-            resolveTargetId = null;
             document.getElementById('resolveModal').classList.add('hidden');
+            activeItemId = null;
         }
 
         async function confirmResolve() {
-            if (!resolveTargetId) return;
-            const btn = document.getElementById('resolveConfirmBtn');
-            btn.textContent = 'Deleting...';
-            btn.disabled = true;
+            if (!activeItemId) return;
             try {
-                const res  = await fetch(`${API}/api/items/${resolveTargetId}`, {
+                // To mark an item as resolved, we make a delete request to remove it from the board
+                const res = await fetch(`${API}/api/items/${activeItemId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
                 if (!json.success) throw new Error(json.message);
 
-                const resolved = parseInt(sessionStorage.getItem('cf_resolved') || '0') + 1;
-                sessionStorage.setItem('cf_resolved', resolved);
+                // Increment session storage resolved stats tracker
+                let currentResolved = parseInt(sessionStorage.getItem('cf_resolved') || '0');
+                sessionStorage.setItem('cf_resolved', currentResolved + 1);
 
                 closeResolveModal();
-                loadMyItems();
+                loadMyItems(); // Reload the feed and metrics dynamically
             } catch (err) {
-                alert('❌ ' + err.message);
-            } finally {
-                btn.textContent = 'Yes, Resolved! ✅';
-                btn.disabled = false;
+                alert('❌ Error resolving item: ' + err.message);
             }
         }
 
-        document.getElementById('resolveModal').addEventListener('click', e => {
-            if (e.target === document.getElementById('resolveModal')) closeResolveModal();
-        });
-
-        // ── Delete ──
+        // ─── DELETE ACTIONS ───────────────────────────────────────────────────
         async function deleteItem(id) {
-            if (!confirm('Are you sure you want to delete this report?')) return;
+            if (!confirm('Are you sure you want to permanently delete this report?')) return;
             try {
-                const res  = await fetch(`${API}/api/items/${id}`, {
+                const res = await fetch(`${API}/api/items/${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
                 if (!json.success) throw new Error(json.message);
+                
                 loadMyItems();
             } catch (err) {
-                alert('❌ ' + err.message);
+                alert('❌ Error deleting item: ' + err.message);
             }
         }
 
-        // ── Edit Modal ──
-        function openEditModal(item) {
-            document.getElementById('editItemId').value       = item._id;
-            document.getElementById('editName').value         = item.itemName;
-            document.getElementById('editCategory').value     = item.itemCategory;
-            document.getElementById('editLocation').value     = item.itemLocation;
-            document.getElementById('editDescription').value  = item.itemDescription || '';
-            document.querySelectorAll('input[name="editStatus"]').forEach(r => r.checked = r.value === item.itemStatus);
+        // ─── EDIT ACTIONS ─────────────────────────────────────────────────────
+        function openEditModal(serializedItem) {
+            // Decode the Base64 serialized object string safely
+            const item = JSON.parse(decodeURIComponent(escape(atob(serializedItem))));
+            
+            activeItemId = item._id;
+            document.getElementById('editItemId').value = item._id;
+            document.getElementById('editName').value = item.itemName;
+            document.getElementById('editCategory').value = item.itemCategory;
+            document.getElementById('editLocation').value = item.itemLocation;
+            document.getElementById('editDescription').value = item.itemDescription || '';
+            
+            // Handle radio checked states safely
+            const statusRadios = document.getElementsByName('editStatus');
+            statusRadios.forEach(radio => {
+                radio.checked = (radio.value === item.itemStatus);
+            });
+
             document.getElementById('editError').classList.add('hidden');
             document.getElementById('editModal').classList.remove('hidden');
         }
 
         function closeEditModal() {
             document.getElementById('editModal').classList.add('hidden');
+            activeItemId = null;
         }
 
-        document.getElementById('editForm').addEventListener('submit', async e => {
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const errEl = document.getElementById('editError');
-            errEl.classList.add('hidden');
-            const id = document.getElementById('editItemId').value;
-            const formData = new FormData();
-            formData.append('itemName',        document.getElementById('editName').value);
-            formData.append('itemStatus',      document.querySelector('input[name="editStatus"]:checked').value);
-            formData.append('itemCategory',    document.getElementById('editCategory').value);
-            formData.append('itemLocation',    document.getElementById('editLocation').value);
-            formData.append('itemDescription', document.getElementById('editDescription').value);
+            const errorEl = document.getElementById('editError');
+            errorEl.classList.add('hidden');
+
+            const selectedStatus = document.querySelector('input[name="editStatus"]:checked').value;
+
+            const updateData = {
+                itemName: document.getElementById('editName').value,
+                itemStatus: selectedStatus,
+                itemCategory: document.getElementById('editCategory').value,
+                itemLocation: document.getElementById('editLocation').value,
+                itemDescription: document.getElementById('editDescription').value
+            };
+
             try {
-                const res  = await fetch(`${API}/api/items/${id}`, {
+                const res = await fetch(`${API}/api/items/${activeItemId}`, {
                     method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
                 });
+                
                 const json = await res.json();
                 if (!json.success) throw new Error(json.message);
+
                 closeEditModal();
                 loadMyItems();
             } catch (err) {
-                errEl.textContent = '❌ ' + err.message;
-                errEl.classList.remove('hidden');
+                errorEl.textContent = '❌ ' + err.message;
+                errorEl.classList.remove('hidden');
             }
         });
 
-        document.getElementById('editModal').addEventListener('click', e => {
-            if (e.target === document.getElementById('editModal')) closeEditModal();
-        });
-
+        // Initialize user items dashboard grid layout upon initial load lifecycle trigger
         loadMyItems();
     </script>
 </body>
